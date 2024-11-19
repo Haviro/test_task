@@ -1,0 +1,64 @@
+			СОЗДАНИЕ ФУНКЦИИ
+
+CREATE OR REPLACE FUNCTION абоненты_с_задолженностью(начало_периода DATE, количество_месяцев BIGINT)
+RETURNS TABLE (
+    абонент TEXT,
+    месяцев_оплачено BIGINT,
+    дата_последнего_платежа DATE,
+    сумма_последнего_платежа INT
+) AS $$
+DECLARE
+    конец_периода DATE := начало_периода + (количество_месяцев * INTERVAL '1 month');
+BEGIN
+    RETURN QUERY
+    SELECT
+        COALESCE(f.фио, j.наименование) AS абонент,
+        COUNT(DISTINCT date_trunc('month', p.дата)) AS месяцев_оплачено,
+        MAX(p.дата) AS дата_последнего_платежа,
+        CASE
+            WHEN COUNT(p.id) > 0 THEN MAX(p2.сумма)
+            ELSE NULL
+        END AS сумма_последнего_платежа
+    FROM 
+        (SELECT generate_series(начало_периода, конец_периода - INTERVAL '1 month', INTERVAL '1 month') AS месяц) AS m
+    LEFT JOIN платежи p ON date_trunc('month', p.дата) = m.месяц
+    LEFT JOIN физические_лица f ON p.физическое_лицо = f.id
+    LEFT JOIN юридические_лица j ON p.юридическое_лицо = j.id
+    GROUP BY
+        COALESCE(f.id, j.id), 
+        COALESCE(f.фио, j.наименование) 
+    HAVING
+        COUNT(DISTINCT date_trunc('month', p.дата)) < количество_месяцев;
+END;
+$$ LANGUAGE plpgsql;
+
+			ЗАПРОС
+
+SELECT * FROM абоненты_с_задолженностью('2021-01-01', 8);
+
+			ФУНКЦИЯ
+
+
+DECLARE
+    конец_периода DATE := начало_периода + (количество_месяцев * INTERVAL '1 month');
+BEGIN
+    RETURN QUERY
+    SELECT
+        COALESCE(f.фио, j.наименование) AS абонент,
+        COUNT(DISTINCT date_trunc('month', p.дата)) AS месяцев_оплачено,
+        MAX(p.дата) AS дата_последнего_платежа,
+        CASE
+            WHEN COUNT(p.id) > 0 THEN MAX(p2.сумма)
+            ELSE NULL
+        END AS сумма_последнего_платежа
+    FROM 
+        (SELECT generate_series(начало_периода, конец_периода - INTERVAL '1 month', INTERVAL '1 month') AS месяц) AS m
+    LEFT JOIN платежи p ON date_trunc('month', p.дата) = m.месяц
+    LEFT JOIN физические_лица f ON p.физическое_лицо = f.id
+    LEFT JOIN юридические_лица j ON p.юридическое_лицо = j.id
+    GROUP BY
+        COALESCE(f.id, j.id), 
+        COALESCE(f.фио, j.наименование) 
+    HAVING
+        COUNT(DISTINCT date_trunc('month', p.дата)) < количество_месяцев;
+END;
